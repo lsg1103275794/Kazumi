@@ -34,6 +34,10 @@ class _SourceSheetView extends StatefulWidget {
     required this.keyword,
     required this.groups,
     required this.firstResultSource,
+    required this.webDavConfigured,
+    required this.webDavScanning,
+    required this.webDavMatches,
+    required this.onPlayWebDavFolder,
     required this.onSourceSearch,
     required this.onSourceAliasSearch,
     required this.onRetry,
@@ -46,6 +50,10 @@ class _SourceSheetView extends StatefulWidget {
   final String keyword;
   final List<_SourceSearchGroup> groups;
   final String? firstResultSource;
+  final bool webDavConfigured;
+  final bool webDavScanning;
+  final List<WebDavSourceEntry> webDavMatches;
+  final ValueChanged<WebDavSourceEntry> onPlayWebDavFolder;
   final ValueChanged<String> onSourceSearch;
   final ValueChanged<String> onSourceAliasSearch;
   final ValueChanged<String> onRetry;
@@ -142,6 +150,17 @@ class _SourceSheetViewState extends State<_SourceSheetView> {
               child: CustomScrollView(
                 controller: _scrollController,
                 slivers: [
+                  if (widget.webDavConfigured &&
+                      (widget.webDavScanning ||
+                          widget.webDavMatches.isNotEmpty)) ...[
+                    SliverPadding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      sliver: SliverToBoxAdapter(
+                        child: _buildWebDavSection(),
+                      ),
+                    ),
+                    const SliverToBoxAdapter(child: SizedBox(height: 12)),
+                  ],
                   if (widget.groups.isEmpty)
                     const SliverToBoxAdapter(
                       child: GeneralEmptyState(
@@ -177,6 +196,89 @@ class _SourceSheetViewState extends State<_SourceSheetView> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// 网盘内置来源: 展示扫描状态与命中的番剧文件夹。
+  Widget _buildWebDavSection() {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final statusLabel = widget.webDavScanning
+        ? '检索中…'
+        : '${widget.webDavMatches.length} 个匹配';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 0),
+          child: Row(
+            children: [
+              Icon(Icons.folder_special_rounded,
+                  size: 20, color: colors.onSurfaceVariant),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text('网盘',
+                    style: theme.textTheme.labelLarge
+                        ?.copyWith(color: colors.onSurfaceVariant)),
+              ),
+              Text(statusLabel,
+                  style: theme.textTheme.labelMedium
+                      ?.copyWith(color: colors.onSurfaceVariant)),
+            ],
+          ),
+        ),
+        if (widget.webDavScanning)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: _buildSearching(),
+          )
+        else ...[
+          const SizedBox(height: splitListRowGap),
+          for (var index = 0; index < widget.webDavMatches.length; index++)
+            _buildWebDavMatchRow(widget.webDavMatches[index], index),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildWebDavMatchRow(WebDavSourceEntry match, int index) {
+    final theme = Theme.of(context);
+    final count = widget.webDavMatches.length;
+    return SplitListRow(
+      topRadius: index == 0 ? splitListOuterRadius : splitListInnerRadius,
+      bottomRadius:
+          index == count - 1 ? splitListOuterRadius : splitListInnerRadius,
+      onTap: () => widget.onPlayWebDavFolder(match),
+      child: Semantics(
+        button: true,
+        label: '播放网盘文件夹 ${match.name}',
+        excludeSemantics: true,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 56),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                Icon(Icons.folder_rounded,
+                    size: 22, color: theme.colorScheme.primary),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    match.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyLarge
+                        ?.copyWith(color: theme.colorScheme.onSurface),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Icon(Icons.play_arrow_rounded,
+                    color: theme.colorScheme.primary),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

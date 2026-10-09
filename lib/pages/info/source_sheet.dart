@@ -17,6 +17,7 @@ import 'package:kazumi/modules/search/plugin_search_module.dart';
 import 'package:kazumi/pages/collect/collect_controller.dart';
 import 'package:kazumi/pages/info/info_controller.dart';
 import 'package:kazumi/pages/video/video_playback_args.dart';
+import 'package:kazumi/pages/webdav_media/webdav_player_page.dart';
 import 'package:kazumi/plugins/anti_crawler_config.dart';
 import 'package:kazumi/plugins/plugins.dart';
 import 'package:kazumi/plugins/plugins_controller.dart';
@@ -25,6 +26,8 @@ import 'package:kazumi/services/plugin/captcha_verification_service.dart';
 import 'package:kazumi/services/plugin/plugin_search_service.dart';
 import 'package:kazumi/services/plugin/rule_engine_models.dart'
     show RuleCancelToken;
+import 'package:kazumi/services/storage/storage.dart';
+import 'package:kazumi/services/webdav/webdav_source_service.dart';
 import 'package:kazumi/utils/device.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -50,6 +53,11 @@ class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
   late final PluginSearchService _searchService;
   late final _SourceCaptchaFlow _captchaFlow;
 
+  bool _webDavConfigured = false;
+  bool _webDavScanning = false;
+  List<WebDavSourceEntry> _webDavMatches = const [];
+  int _webDavScanGeneration = 0;
+
   @override
   void initState() {
     super.initState();
@@ -64,6 +72,7 @@ class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
       onCancelled: (plugin) => _retry(plugin.name),
     );
     _searchService.queryAllSource(_keyword);
+    _scanWebDavSources();
   }
 
   @override
@@ -174,6 +183,81 @@ class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
         },
       );
 
+  /// 在网盘中检索与番剧同名的文件夹, 作为内置片源展示。
+  Future<void> _scanWebDavSources() async {
+    final generation = ++_webDavScanGeneration;
+    final configured =
+        GStorage.getSetting(SettingsKeys.webDavURL).trim().isNotEmpty;
+    if (!configured) return;
+    // initState 阶段直接赋值, 首帧即可呈现检索中状态。
+    _webDavConfigured = true;
+    _webDavScanning = true;
+    try {
+      final matches =
+          await WebDavSourceService.searchFolders(keyword: _keyword);
+      if (!mounted || generation != _webDavScanGeneration) return;
+      setState(() {
+        _webDavMatches = matches;
+        _webDavScanning = false;
+      });
+    } catch (e) {
+      KazumiLogger().w('SourceSheet: WebDAV scan failed', error: e);
+      if (!mounted || generation != _webDavScanGeneration) return;
+      setState(() => _webDavScanning = false);
+    }
+  }
+
+  Future<void> _openWebDavFolder(WebDavSourceEntry match) async {
+    if (dialogs.isRunning) return;
+    var episodes = const <WebDavSourceEntry>[];
+    var loadFailed = false;
+    await dialogs.run((task) async {
+      try {
+        episodes = await task.loading(
+          message: '正在读取网盘选集',
+          barrierDismissible: isDesktop(),
+          action: () => WebDavSourceService.listEpisodes(match.path),
+        );
+      } catch (error) {
+        loadFailed = true;
+        KazumiLogger()
+            .w('SourceSheet: failed to load WebDAV episodes', error: error);
+      }
+    });
+    if (!mounted) return;
+    if (loadFailed) {
+      KazumiDialog.showToast(message: '读取网盘选集失败，请重试');
+      return;
+    }
+    if (episodes.isEmpty) {
+      KazumiDialog.showToast(message: '该文件夹内没有视频文件');
+      return;
+    }
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(sheetContext).size.height * 0.6,
+        ),
+        child: _WebDavEpisodeSheet(
+          folderName: match.name,
+          episodes: episodes,
+          onPlay: (episode) {
+            Navigator.of(sheetContext).pop();
+            context.pushNamed(
+              '/webdav-media/player',
+              arguments: WebDavPlayerPageArgs(
+                path: episode.path,
+                name: episode.name,
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => Observer(
         builder: (context) {
@@ -205,6 +289,10 @@ class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
             keyword: _keyword,
             groups: groupsByName.values.toList(),
             firstResultSource: firstResultSource,
+            webDavConfigured: _webDavConfigured,
+            webDavScanning: _webDavScanning,
+            webDavMatches: _webDavMatches,
+            onPlayWebDavFolder: _openWebDavFolder,
             onSourceSearch: _showCustomKeyword,
             onSourceAliasSearch: _showAliasPicker,
             onRetry: _retry,
@@ -216,4 +304,73 @@ class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
           );
         },
       );
+}
+
+/// 网盘文件夹的选集弹层: 列出其中的视频文件, 点击后进入网盘播放器。
+class _WebDavEpisodeSheet extends StatelessWidget {
+  const _WebDavEpisodeSheet({
+    required this.folderName,
+    required this.episodes,
+    required this.onPlay,
+  });
+
+  final String folderName;
+  final List<WebDavSourceEntry> episodes;
+  final ValueChanged<WebDavSourceEntry> onPlay;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SafeArea(
+      top: false,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          MaterialBottomSheetHeader(
+            title: folderName,
+            description: '${episodes.length} 个选集',
+            compact: true,
+            onClose: () => Navigator.of(context).pop(),
+          ),
+          Flexible(
+            child: ListView.builder(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+              itemCount: episodes.length,
+              itemBuilder: (context, index) {
+                final episode = episodes[index];
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: SplitListRow(
+                    onTap: () => onPlay(episode),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(minHeight: 52),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                episode.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodyLarge,
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Icon(Icons.play_arrow_rounded,
+                                color: theme.colorScheme.primary),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

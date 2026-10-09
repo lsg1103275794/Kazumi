@@ -89,4 +89,42 @@ class WebDavMediaUtils {
         unit == 0 ? value.toStringAsFixed(0) : value.toStringAsFixed(1);
     return '$text ${units[unit]}';
   }
+
+  /// 自然序比较: 数字段按数值比较, 避免 '2' 排在 '10' 之后。
+  static int compareNatural(String a, String b) {
+    var i = 0;
+    var j = 0;
+    while (i < a.length && j < b.length) {
+      final digitA = _isDigit(a[i]);
+      final digitB = _isDigit(b[j]);
+      if (digitA && digitB) {
+        final startA = i;
+        final startB = j;
+        while (i < a.length && _isDigit(a[i])) {
+          i++;
+        }
+        while (j < b.length && _isDigit(b[j])) {
+          j++;
+        }
+        final numberA = int.tryParse(a.substring(startA, i)) ?? 0;
+        final numberB = int.tryParse(b.substring(startB, j)) ?? 0;
+        final byNumber = numberA.compareTo(numberB);
+        if (byNumber != 0) {
+          return byNumber;
+        }
+      } else {
+        final byChar = a[i].toLowerCase().compareTo(b[j].toLowerCase());
+        if (byChar != 0) {
+          return byChar;
+        }
+        i++;
+        j++;
+      }
+    }
+    return (a.length - i).compareTo(b.length - j);
+  }
+
+  static bool _isDigit(String char) {
+    return char.codeUnitAt(0) >= 0x30 && char.codeUnitAt(0) <= 0x39;
+  }
 }
