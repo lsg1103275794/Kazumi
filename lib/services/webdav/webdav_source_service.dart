@@ -22,7 +22,7 @@ class WebDavSourceEntry {
 class WebDavSourceService {
   WebDavSourceService._();
 
-  static const int _defaultMaxDepth = 3;
+  static const int _defaultMaxDepth = 4;
   static const int _defaultMaxResults = 8;
   static const int _concurrency = 6;
 
