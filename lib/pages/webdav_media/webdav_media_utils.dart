@@ -90,6 +90,29 @@ class WebDavMediaUtils {
     return '$text ${units[unit]}';
   }
 
+  /// 关键词与文件夹名的匹配打分。
+  ///
+  /// 连续包含得 2 分; 字符按顺序出现 (子序列) 得 1 分, 用于兼容资源站
+  /// 在文件名中插入干扰字符的情况 (如 "C 苍沧Y元1T图第三季" 命中 "沧元图");
+  /// 不匹配得 0 分。
+  static int matchScore(String folderName, String keyword) {
+    final name = folderName.trim().toLowerCase();
+    final kw = keyword.trim().toLowerCase();
+    if (kw.isEmpty) {
+      return 0;
+    }
+    if (name.contains(kw)) {
+      return 2;
+    }
+    var matched = 0;
+    for (var i = 0; i < name.length && matched < kw.length; i++) {
+      if (name[i] == kw[matched]) {
+        matched++;
+      }
+    }
+    return matched == kw.length ? 1 : 0;
+  }
+
   /// 自然序比较: 数字段按数值比较, 避免 '2' 排在 '10' 之后。
   static int compareNatural(String a, String b) {
     var i = 0;

@@ -15,8 +15,9 @@ class WebDavSourceEntry {
 
 /// 在 WebDAV 网盘中按名称检索番剧文件夹, 供来源弹层作为内置片源使用。
 ///
-/// 从根目录出发做深度受限的广度优先扫描: 文件夹名包含关键词即视为命中,
-/// 命中的文件夹不再继续下探; 每层并发受限, 命中数达到上限后提前收敛,
+/// 从根目录出发做深度受限的广度优先扫描: 文件夹名与关键词按打分匹配
+/// (连续包含 > 子序列, 见 [WebDavMediaUtils.matchScore]), 命中的文件夹
+/// 不再继续下探; 每层并发受限, 命中数达到上限后提前收敛,
 /// 避免大容量网盘拖慢来源弹层的呈现。
 class WebDavSourceService {
   WebDavSourceService._();
@@ -25,14 +26,15 @@ class WebDavSourceService {
   static const int _defaultMaxResults = 8;
   static const int _concurrency = 6;
 
-  /// 检索名称包含 [keyword] 的文件夹, 返回按扫描顺序排列的命中结果。
+  /// 检索名称匹配 [keyword] 的文件夹。
+  ///
+  /// 连续包含的命中排在子序列命中之前, 同分按扫描顺序排列。
   static Future<List<WebDavSourceEntry>> searchFolders({
     required String keyword,
     int maxDepth = _defaultMaxDepth,
     int maxResults = _defaultMaxResults,
   }) async {
-    final normalized = keyword.trim().toLowerCase();
-    if (normalized.isEmpty) {
+    if (keyword.trim().isEmpty) {
       return const [];
     }
     final webDav = WebDav();
@@ -40,6 +42,7 @@ class WebDavSourceService {
       await webDav.init();
     }
     final matches = <WebDavSourceEntry>[];
+    final scores = <int>[];
     var frontier = <String>['/'];
     for (var depth = 0; depth < maxDepth && frontier.isNotEmpty; depth++) {
       final nextFrontier = <String>[];
@@ -49,23 +52,35 @@ class WebDavSourceService {
         );
         for (final children in childrenGroups) {
           for (final child in children) {
-            if (child.name.toLowerCase().contains(normalized)) {
+            final score = WebDavMediaUtils.matchScore(child.name, keyword);
+            if (score > 0) {
               matches.add(WebDavSourceEntry(
                 path: child.path,
                 name: child.name,
               ));
-              if (matches.length >= maxResults) {
-                return matches;
-              }
+              scores.add(score);
             } else {
               nextFrontier.add(child.path);
             }
           }
         }
       }
+      if (matches.length >= maxResults) {
+        break;
+      }
       frontier = nextFrontier;
     }
-    return matches;
+    if (matches.isEmpty) {
+      return const [];
+    }
+    final order = List<int>.generate(matches.length, (i) => i);
+    order.sort((a, b) {
+      final byScore = scores[b].compareTo(scores[a]);
+      return byScore != 0 ? byScore : a.compareTo(b);
+    });
+    return [
+      for (final i in order) matches[i],
+    ].take(maxResults).toList();
   }
 
   /// 列出 [folderPath] 内的视频文件, 按自然序排序作为选集。

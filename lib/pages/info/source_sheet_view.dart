@@ -150,9 +150,7 @@ class _SourceSheetViewState extends State<_SourceSheetView> {
               child: CustomScrollView(
                 controller: _scrollController,
                 slivers: [
-                  if (widget.webDavConfigured &&
-                      (widget.webDavScanning ||
-                          widget.webDavMatches.isNotEmpty)) ...[
+                  if (widget.webDavConfigured) ...[
                     SliverPadding(
                       padding: const EdgeInsets.symmetric(horizontal: 24),
                       sliver: SliverToBoxAdapter(
@@ -233,11 +231,19 @@ class _SourceSheetViewState extends State<_SourceSheetView> {
             padding: const EdgeInsets.only(top: 8),
             child: _buildSearching(),
           )
-        else ...[
+        else if (widget.webDavMatches.isNotEmpty) ...[
           const SizedBox(height: splitListRowGap),
           for (var index = 0; index < widget.webDavMatches.length; index++)
             _buildWebDavMatchRow(widget.webDavMatches[index], index),
-        ],
+        ] else
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              '未在网盘中找到同名的文件夹',
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: colors.onSurfaceVariant),
+            ),
+          ),
       ],
     );
   }
