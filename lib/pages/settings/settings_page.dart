@@ -68,6 +68,12 @@ const List<_SettingsGroup> _settingsGroups = [
         icon: Icons.downloading_rounded,
         path: '/settings/download-settings',
       ),
+      _SettingsCategory(
+        label: '网盘媒体',
+        description: '浏览 WebDAV 云盘视频',
+        icon: Icons.video_library_rounded,
+        path: '/settings/webdav-media',
+      ),
     ],
   ),
   _SettingsGroup(

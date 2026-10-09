@@ -21,6 +21,7 @@ import 'package:kazumi/pages/settings/sync/bangumi_sync_page.dart';
 import 'package:kazumi/pages/settings/sync/sync_settings_page.dart';
 import 'package:kazumi/pages/settings/sync/webdav_server_page.dart';
 import 'package:kazumi/pages/settings/sync/webdav_sync_page.dart';
+import 'package:kazumi/pages/webdav_media/webdav_media_page.dart';
 import 'package:kazumi/pages/settings/theme_settings_page.dart';
 import 'package:kazumi/pages/settings/update_settings.dart';
 import 'package:kazumi/request/config/api_endpoints.dart';
@@ -44,6 +45,8 @@ final settingsModule = createModule(
                   ))
           ..route('/webdav/editor',
               child: (context, state) => const WebDavServerPage())
+          ..route('/webdav-media/',
+              child: (context, state) => const WebDavMediaPage())
           ..route(
             '/update',
             child: (context, state) => const UpdateSettingsPage(),

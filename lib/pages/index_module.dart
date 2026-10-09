@@ -16,6 +16,7 @@ import 'package:kazumi/pages/settings/settings_module.dart';
 import 'package:kazumi/pages/timeline/timeline_controller.dart';
 import 'package:kazumi/pages/timeline/timeline_module.dart';
 import 'package:kazumi/pages/video/video_module.dart';
+import 'package:kazumi/pages/webdav_media/webdav_player_page.dart';
 import 'package:kazumi/services/storage/storage.dart';
 import 'package:kazumi/plugins/plugins_controller.dart';
 import 'package:kazumi/pages/collect/collect_controller.dart';
@@ -102,6 +103,16 @@ final indexModule = createModule(
       )
       ..module(tabModule)
       ..module(videoModule)
+      ..route(
+        '/webdav-media/player',
+        child: (context, state) {
+          final args = state.arguments;
+          if (args is! WebDavPlayerPageArgs) {
+            return const RouteErrorPage(message: '网盘播放参数无效，请返回后重试。');
+          }
+          return WebDavPlayerPage(path: args.path, name: args.name);
+        },
+      )
       ..route(
         ImageViewer.routePath,
         child: (context, state) {
