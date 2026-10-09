@@ -44,6 +44,13 @@ void main() {
       );
     });
 
+    test('子序列匹配时忽略空白差异', () {
+      expect(
+        WebDavMediaUtils.matchScore('C 苍沧Y元1T图第三季.2026', '沧元图 第三季'),
+        1,
+      );
+    });
+
     test('大小写不敏感', () {
       expect(WebDavMediaUtils.matchScore('Grand Blue S3', 'grand blue'), 2);
     });

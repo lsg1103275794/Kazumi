@@ -4,6 +4,9 @@ import 'dart:convert';
 class WebDavMediaUtils {
   WebDavMediaUtils._();
 
+  /// 匹配时的空白字符 (空格/制表符等, 不含换行外的路径分隔语义)。
+  static final RegExp _whitespacePattern = RegExp(r'[ \t\u3000]');
+
   /// 常见视频容器扩展名 (小写, 不含点)。
   static const Set<String> _videoExtensions = {
     'mp4',
@@ -92,12 +95,13 @@ class WebDavMediaUtils {
 
   /// 关键词与文件夹名的匹配打分。
   ///
-  /// 连续包含得 2 分; 字符按顺序出现 (子序列) 得 1 分, 用于兼容资源站
-  /// 在文件名中插入干扰字符的情况 (如 "C 苍沧Y元1T图第三季" 命中 "沧元图");
-  /// 不匹配得 0 分。
+  /// 匹配前会去掉两侧与中间的空白字符 (网盘文件夹与番剧名的空格习惯
+  /// 往往不一致); 连续包含得 2 分; 字符按顺序出现 (子序列) 得 1 分,
+  /// 用于兼容资源站在文件名中插入干扰字符的情况 (如 "C 苍沧Y元1T图第三季"
+  /// 命中 "沧元图 第三季"); 不匹配得 0 分。
   static int matchScore(String folderName, String keyword) {
-    final name = folderName.trim().toLowerCase();
-    final kw = keyword.trim().toLowerCase();
+    final name = folderName.replaceAll(_whitespacePattern, '').toLowerCase();
+    final kw = keyword.replaceAll(_whitespacePattern, '').toLowerCase();
     if (kw.isEmpty) {
       return 0;
     }
