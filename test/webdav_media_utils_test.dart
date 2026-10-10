@@ -32,27 +32,42 @@ void main() {
   });
 
   group('WebDavMediaUtils.matchScore', () {
-    test('连续包含得 2 分', () {
-      expect(WebDavMediaUtils.matchScore('凡人修仙传', '凡人修仙传'), 2);
-      expect(WebDavMediaUtils.matchScore('凡人修仙传 第一季', '凡人修仙传'), 2);
+    test('连续包含得 4 分', () {
+      expect(WebDavMediaUtils.matchScore('凡人修仙传', '凡人修仙传'), 4);
+      expect(WebDavMediaUtils.matchScore('凡人修仙传 第一季', '凡人修仙传'), 4);
     });
 
-    test('子序列包含得 1 分 (兼容干扰字符命名)', () {
+    test('完整子序列得 2 分 (兼容干扰字符命名)', () {
       expect(
         WebDavMediaUtils.matchScore('C 苍沧Y元1T图第三季.2026', '沧元图'),
-        1,
+        2,
       );
     });
 
     test('子序列匹配时忽略空白差异', () {
       expect(
         WebDavMediaUtils.matchScore('C 苍沧Y元1T图第三季.2026', '沧元图 第三季'),
+        2,
+      );
+    });
+
+    test('少量字符缺失得 1 分 (兼容拼音首字母混排)', () {
+      expect(
+        WebDavMediaUtils.matchScore('凡 R 修 仙 传 [慕｜兰Z战]', '凡人修仙传'),
         1,
       );
     });
 
+    test('关键词过短时不启用模糊命中', () {
+      expect(WebDavMediaUtils.matchScore('沧云图', '沧元图'), 0);
+    });
+
+    test('缺失过多时不命中', () {
+      expect(WebDavMediaUtils.matchScore('F 凡人xxZ 4K', '凡人修仙传'), 0);
+    });
+
     test('大小写不敏感', () {
-      expect(WebDavMediaUtils.matchScore('Grand Blue S3', 'grand blue'), 2);
+      expect(WebDavMediaUtils.matchScore('Grand Blue S3', 'grand blue'), 4);
     });
 
     test('不匹配得 0 分', () {

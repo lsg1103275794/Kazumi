@@ -98,7 +98,11 @@ class WebDavMediaUtils {
   /// 匹配前会去掉两侧与中间的空白字符 (网盘文件夹与番剧名的空格习惯
   /// 往往不一致); 连续包含得 2 分; 字符按顺序出现 (子序列) 得 1 分,
   /// 用于兼容资源站在文件名中插入干扰字符的情况 (如 "C 苍沧Y元1T图第三季"
-  /// 命中 "沧元图 第三季"); 不匹配得 0 分。
+  /// 命中 "沧元图 第三季")。打分制:
+  /// 4 = 去空白后连续包含; 2 = 完整子序列命中;
+  /// 1 = 少量关键字字符缺失的模糊命中 (仅关键词长度 >= 5 时启用,
+  /// 兼容 "凡 R 修 仙 传" 对应 "凡人修仙传" 这类拼音首字母混排命名);
+  /// 0 = 不匹配。
   static int matchScore(String folderName, String keyword) {
     final name = folderName.replaceAll(_whitespacePattern, '').toLowerCase();
     final kw = keyword.replaceAll(_whitespacePattern, '').toLowerCase();
@@ -106,15 +110,39 @@ class WebDavMediaUtils {
       return 0;
     }
     if (name.contains(kw)) {
+      return 4;
+    }
+    final lcs = _lcsLength(name, kw);
+    if (lcs == kw.length) {
       return 2;
     }
-    var matched = 0;
-    for (var i = 0; i < name.length && matched < kw.length; i++) {
-      if (name[i] == kw[matched]) {
-        matched++;
+    if (kw.length >= 5 && lcs >= (kw.length * 0.8).ceil()) {
+      return 1;
+    }
+    return 0;
+  }
+
+  /// [a] 与 [b] 的最长公共子序列长度。
+  /// 文件夹名与关键词都很短, O(lenA * lenB) 代价可忽略。
+  static int _lcsLength(String a, String b) {
+    var prev = List<int>.filled(b.length + 1, 0);
+    var curr = List<int>.filled(b.length + 1, 0);
+    for (var i = 1; i <= a.length; i++) {
+      for (var j = 1; j <= b.length; j++) {
+        if (a.codeUnitAt(i - 1) == b.codeUnitAt(j - 1)) {
+          curr[j] = prev[j - 1] + 1;
+        } else {
+          curr[j] = curr[j - 1] >= prev[j] ? curr[j - 1] : prev[j];
+        }
+      }
+      final swap = prev;
+      prev = curr;
+      curr = swap;
+      for (var j = 0; j <= b.length; j++) {
+        curr[j] = 0;
       }
     }
-    return matched == kw.length ? 1 : 0;
+    return prev[b.length];
   }
 
   /// 自然序比较: 数字段按数值比较, 避免 '2' 排在 '10' 之后。
